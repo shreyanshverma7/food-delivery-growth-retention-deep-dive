@@ -4,7 +4,7 @@ import streamlit as st
 
 from common import render_sidebar_filters, run_readonly_sql, run_query
 
-st.set_page_config(page_title="SQL Playground", layout="wide")
+st.set_page_config(page_title="SQL Playground · Food Delivery Analytics", page_icon="🛵", layout="wide")
 st.title("SQL playground")
 st.caption(
     "Run your own read-only query against the live database. The connection is opened "
@@ -27,18 +27,21 @@ default_query = (
     "GROUP BY city\n"
     "ORDER BY avg_order_value DESC;"
 )
-query = st.text_area("SQL query", value=default_query, height=140)
 
-if st.button("Run query", type="primary"):
-    start = time.time()
-    try:
-        result, truncated = run_readonly_sql(query)
-        elapsed = time.time() - start
-        st.success(f"{len(result)} row(s) in {elapsed:.2f}s" + (" (truncated at 500)" if truncated else ""))
-        st.dataframe(result, width='stretch', hide_index=True)
-    except TimeoutError as e:
-        st.error(str(e))
-    except ValueError as e:
-        st.error(str(e))
-    except Exception as e:
-        st.error(f"Query failed: {e}")
+with st.container(border=True):
+    query = st.text_area("SQL query", value=default_query, height=140)
+
+    if st.button("Run query", type="primary"):
+        start = time.time()
+        try:
+            with st.spinner("Running query…"):
+                result, truncated = run_readonly_sql(query)
+            elapsed = time.time() - start
+            st.success(f"{len(result)} row(s) in {elapsed:.2f}s" + (" (truncated at 500)" if truncated else ""))
+            st.dataframe(result, width='stretch', hide_index=True)
+        except TimeoutError as e:
+            st.error(str(e))
+        except ValueError as e:
+            st.error(str(e))
+        except Exception as e:
+            st.error(f"Query failed: {e}")

@@ -1,10 +1,12 @@
 import streamlit as st
-from common import COLOR_SERIES, in_clause, render_sidebar_filters, run_query
+from common import in_clause, inject_css, render_sidebar_filters, render_stat_tile, run_query
 
 st.set_page_config(
-    page_title="Food-Delivery Growth & Retention Deep-Dive",
+    page_title="Overview · Food Delivery Analytics",
+    page_icon="🛵",
     layout="wide",
 )
+inject_css()
 
 st.title("Food-Delivery Growth & Retention Deep-Dive")
 st.caption(
@@ -15,62 +17,118 @@ st.caption(
 
 f = render_sidebar_filters()
 placeholders, city_params = in_clause(f["cities"])
+pay_placeholders, pay_params = in_clause(f["payments"])
+plat_placeholders, plat_params = in_clause(f["platforms"])
 
-gmv_row = run_query(
-    f"""
-    SELECT ROUND(SUM(o.order_amount), 2) AS gmv, COUNT(*) AS orders
-    FROM orders o JOIN users u ON u.user_id = o.user_id
-    WHERE o.order_status = 'delivered'
-      AND strftime('%Y-%m', o.order_date) BETWEEN ? AND ?
-      AND u.city IN ({placeholders})
-      AND o.payment_method IN ({in_clause(f['payments'])[0]})
-    """,
-    (f["month_start"], f["month_end"], *city_params, *f["payments"]),
-).iloc[0]
+with st.spinner("Loading overview…"):
+    gmv_row = run_query(
+        f"""
+        SELECT ROUND(SUM(o.order_amount), 2) AS gmv, COUNT(*) AS orders
+        FROM orders o JOIN users u ON u.user_id = o.user_id
+        WHERE o.order_status = 'delivered'
+          AND strftime('%Y-%m', o.order_date) BETWEEN ? AND ?
+          AND u.city IN ({placeholders})
+          AND o.payment_method IN ({pay_placeholders})
+        """,
+        (f["month_start"], f["month_end"], *city_params, *pay_params),
+    ).iloc[0]
 
-risk_row = run_query(
-    f"""
-    SELECT ROUND(SUM(CASE WHEN o.order_status = 'cancelled' THEN o.order_amount ELSE 0 END), 2) AS risk
-    FROM orders o JOIN users u ON u.user_id = o.user_id
-    WHERE strftime('%Y-%m', o.order_date) BETWEEN ? AND ?
-      AND u.city IN ({placeholders})
-      AND o.payment_method IN ({in_clause(f['payments'])[0]})
-    """,
-    (f["month_start"], f["month_end"], *city_params, *f["payments"]),
-).iloc[0]
+    risk_row = run_query(
+        f"""
+        SELECT ROUND(SUM(CASE WHEN o.order_status = 'cancelled' THEN o.order_amount ELSE 0 END), 2) AS risk
+        FROM orders o JOIN users u ON u.user_id = o.user_id
+        WHERE strftime('%Y-%m', o.order_date) BETWEEN ? AND ?
+          AND u.city IN ({placeholders})
+          AND o.payment_method IN ({pay_placeholders})
+        """,
+        (f["month_start"], f["month_end"], *city_params, *pay_params),
+    ).iloc[0]
 
-funnel_row = run_query(
-    f"""
-    SELECT
-        COUNT(DISTINCT CASE WHEN event_name = 'app_open' THEN user_id END) AS opened,
-        COUNT(DISTINCT CASE WHEN event_name = 'order_placed' THEN user_id END) AS ordered
-    FROM app_events
-    WHERE platform IN ({in_clause(f['platforms'])[0]})
-    """,
-    tuple(f["platforms"]),
-).iloc[0]
+    funnel_row = run_query(
+        f"""
+        SELECT
+            COUNT(DISTINCT CASE WHEN event_name = 'app_open' THEN user_id END) AS opened,
+            COUNT(DISTINCT CASE WHEN event_name = 'order_placed' THEN user_id END) AS ordered
+        FROM app_events
+        WHERE platform IN ({plat_placeholders})
+        """,
+        tuple(plat_params),
+    ).iloc[0]
 
-gmv = gmv_row["gmv"] or 0
+    # Unfiltered baselines, purely for the "vs full dataset" deltas below —
+    # always computable regardless of which filters are active.
+    full_gmv_row = run_query(
+        "SELECT ROUND(SUM(order_amount), 2) AS gmv, COUNT(*) AS orders FROM orders WHERE order_status = 'delivered'"
+    ).iloc[0]
+    full_risk_row = run_query(
+        "SELECT ROUND(SUM(CASE WHEN order_status = 'cancelled' THEN order_amount ELSE 0 END), 2) AS risk FROM orders"
+    ).iloc[0]
+    full_funnel_row = run_query(
+        """
+        SELECT
+            COUNT(DISTINCT CASE WHEN event_name = 'app_open' THEN user_id END) AS opened,
+            COUNT(DISTINCT CASE WHEN event_name = 'order_placed' THEN user_id END) AS ordered
+        FROM app_events
+        """
+    ).iloc[0]
+
+
+def fmt_money(v):
+    return f"${v/1e6:.2f}M" if v >= 1e6 else f"${v/1e3:.1f}K"
+
+
+gmv, orders = gmv_row["gmv"] or 0, int(gmv_row["orders"] or 0)
 risk = risk_row["risk"] or 0
 opened, ordered = funnel_row["opened"] or 0, funnel_row["ordered"] or 0
+full_gmv, full_orders = full_gmv_row["gmv"] or 1, int(full_gmv_row["orders"] or 1)
+full_risk = full_risk_row["risk"] or 1
+full_opened, full_ordered = full_funnel_row["opened"] or 1, full_funnel_row["ordered"] or 0
+
+conv_pct = 100 * ordered / opened if opened else 0
+full_conv_pct = 100 * full_ordered / full_opened if full_opened else 0
 
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Delivered GMV", f"${gmv/1e6:.2f}M" if gmv >= 1e6 else f"${gmv/1e3:.1f}K")
-col2.metric("Delivered orders", f"{int(gmv_row['orders'] or 0):,}")
-col3.metric(
-    "app_open → order_placed",
-    f"{(100*ordered/opened if opened else 0):.1f}%",
-    help="Filtered by the platform selection in the sidebar.",
-)
-col4.metric(
-    "Revenue at risk (cancelled)",
-    f"${risk/1e6:.2f}M" if risk >= 1e6 else f"${risk/1e3:.1f}K",
-    help="Filtered by month range, city, and payment method.",
-)
+with col1:
+    render_stat_tile(
+        "Delivered GMV", fmt_money(gmv),
+        sub=f"{orders:,} delivered orders",
+        delta=f"{100*gmv/full_gmv:.0f}% of full year",
+    )
+with col2:
+    render_stat_tile(
+        "Delivered orders", f"{orders:,}",
+        sub=f"of {full_orders:,} full-year orders",
+        delta=f"{100*orders/full_orders:.0f}% of full year",
+    )
+with col3:
+    render_stat_tile(
+        "app_open → order_placed", f"{conv_pct:.1f}%",
+        sub=f"{ordered:,} of {opened:,} users convert",
+        delta=f"full year: {full_conv_pct:.1f}%",
+    )
+with col4:
+    render_stat_tile(
+        "Revenue at risk (cancelled)", fmt_money(risk),
+        sub="filtered by month, city, payment",
+        delta=f"{100*risk/full_risk:.0f}% of full year",
+    )
 
 st.divider()
-st.markdown(
-    """
+
+with st.container(border=True):
+    st.subheader("Top 3 findings")
+    st.markdown(
+        """
+1. **The funnel's worst leak is checkout, not awareness.** Conversion falls from 67.2% to 54.8% between checkout and order_placed — the single biggest step-to-step drop — and platform isn't the reason.
+2. **Cancellations are the biggest lever — but only the payment-method breakdown holds up statistically.** $1.24M (41.7% of delivered GMV) sits in cancelled orders. UPI's higher cancellation rate is real (p=0.019); the city-to-city spread is not (p=0.95).
+3. **Retention is genuinely improving, but the ceiling is still low.** Month-1 retention climbs from ~20% to ~38–44% across cohorts with a full observation window — a real trend — but fewer than half of any cohort ever places a second order.
+        """
+    )
+
+st.divider()
+with st.container(border=True):
+    st.markdown(
+        """
     Use the pages in the sidebar to explore each question:
 
     - **Funnel** — step-by-step drop-off, and whether it differs by platform
@@ -84,4 +142,4 @@ st.markdown(
     Full write-up, real numbers, and the underlying SQL for each question:
     [README on GitHub](https://github.com/shreyanshverma7/food-delivery-growth-retention-deep-dive).
     """
-)
+    )
