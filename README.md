@@ -111,15 +111,32 @@ Every rate comparison above was point-estimated first, then chi-square tested fo
 
 The script also runs a **power analysis** for the stretch A/B test: detecting a +6pp lift on the real 54.76% baseline at 80% power needs **~1,060 users per group** — the real checkout population (862 total, ~431/group) is well short of that, which is exactly why [the simulated A/B test](analysis/ab_test_simulation.py) came back non-significant. At the actual sample size available, only a lift of roughly +10pp or more would be reliably detectable.
 
-## Dashboard
+## Interactive dashboard (Streamlit)
 
 ![Dashboard screenshot](screenshots/dashboard.png)
 
-Interactive, self-contained (no external dependencies) — open [`dashboard/index.html`](dashboard/index.html) directly in a browser. Regenerate it from the live database with:
+**Live demo:** not yet deployed — see "Deploy it live" below (~2 minutes on Streamlit Community Cloud, free).
+
+A real multi-page app running live queries against `zomato.db`, not a static export:
+
+- **Global filters** (city, month range, platform, payment method) in the sidebar, shared across every page
+- **Drill-downs** — e.g. pick a city on the GMV page to see its top-10 restaurants
+- **Live significance testing** — every cancellation/funnel/delivery-time chart recomputes its chi-square test on whatever you've currently filtered to, not a cached number
+- **An interactive A/B test power calculator** — drag the baseline/lift/power sliders and watch the required sample size update
+- **A read-only SQL playground** — run your own query against the live database (sandboxed: OS-level read-only connection, single-statement, 500-row cap, 5s timeout)
+
+Run it locally:
 
 ```bash
-python3 dashboard/build_dashboard_data.py
+pip install -r requirements.txt
+streamlit run streamlit_app/app.py
 ```
+
+**Deploy it live** (so the link works from a resume/LinkedIn, not just `git clone`):
+1. Push this repo to GitHub (already done if you're reading this on GitHub).
+2. Go to [share.streamlit.io](https://share.streamlit.io), sign in with GitHub, click "New app."
+3. Pick this repo, branch `main`, main file path `streamlit_app/app.py`. Deploy.
+4. Streamlit Cloud installs `requirements.txt` and serves the app at a public `*.streamlit.app` URL — paste that URL into this README once it's up.
 
 ## Stretch: simulated A/B test — [`sql/06_ab_test_checkout_simulation.sql`](sql/06_ab_test_checkout_simulation.sql), [`analysis/ab_test_simulation.py`](analysis/ab_test_simulation.py)
 
@@ -145,8 +162,8 @@ python3 database/build_zomato_db.py
 # run any SQL deliverable
 sqlite3 -header -column database/zomato.db < sql/01_funnel_dropoff.sql
 
-# rebuild the dashboard
-python3 dashboard/build_dashboard_data.py
+# launch the interactive dashboard
+streamlit run streamlit_app/app.py
 
 # run the stretch A/B test simulation
 python3 analysis/ab_test_simulation.py

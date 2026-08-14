@@ -1,0 +1,85 @@
+import plotly.graph_objects as go
+import streamlit as st
+from scipy.stats import chi2_contingency
+
+from common import COLOR_SERIES, render_sidebar_filters, run_query
+
+st.set_page_config(page_title="Platform & Delivery", layout="wide")
+st.title("Platform & delivery-time deep dive")
+
+f = render_sidebar_filters()
+
+st.subheader("Funnel conversion by platform")
+by_platform = run_query(
+    """
+    SELECT platform,
+           COUNT(DISTINCT CASE WHEN event_name = 'app_open' THEN user_id END) AS opened,
+           COUNT(DISTINCT CASE WHEN event_name = 'order_placed' THEN user_id END) AS converted
+    FROM app_events GROUP BY platform ORDER BY platform
+    """
+)
+by_platform["not_converted"] = by_platform["opened"] - by_platform["converted"]
+by_platform["conversion_pct"] = (100 * by_platform["converted"] / by_platform["opened"]).round(2)
+
+fig = go.Figure(
+    go.Bar(
+        x=by_platform["conversion_pct"], y=by_platform["platform"], orientation="h",
+        marker_color=COLOR_SERIES, text=[f"{v:.1f}%" for v in by_platform["conversion_pct"]],
+        textposition="outside",
+    )
+)
+fig.update_layout(height=260, margin=dict(l=10, r=10, t=10, b=10), xaxis_title="app_open → order_placed %")
+st.plotly_chart(fig, width='stretch')
+
+chi2, p, dof, _ = chi2_contingency(by_platform[["converted", "not_converted"]].values)
+st.caption(
+    f"Chi-square: chi2={chi2:.2f}, p={p:.3f} — "
+    + ("**significant**: platform is a real driver here." if p < 0.05
+       else "**not significant**: platforms convert the same, within noise.")
+)
+
+st.divider()
+st.subheader("Does a slow first delivery cost you the second order?")
+buckets = run_query(
+    """
+    WITH first_order AS (
+        SELECT user_id, delivery_time_min,
+               ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY order_date, order_id) AS rn
+        FROM orders WHERE order_status = 'delivered'
+    ),
+    delivered_counts AS (
+        SELECT user_id, COUNT(*) AS delivered_orders
+        FROM orders WHERE order_status = 'delivered' GROUP BY user_id
+    )
+    SELECT
+        CASE WHEN f.delivery_time_min < 30 THEN '1: <30 min'
+             WHEN f.delivery_time_min < 45 THEN '2: 30-44 min'
+             WHEN f.delivery_time_min < 60 THEN '3: 45-59 min'
+             ELSE '4: 60+ min' END AS bucket,
+        COUNT(*) AS users,
+        SUM(CASE WHEN d.delivered_orders >= 2 THEN 1 ELSE 0 END) AS reordered,
+        SUM(CASE WHEN d.delivered_orders < 2 THEN 1 ELSE 0 END) AS did_not_reorder
+    FROM first_order f JOIN delivered_counts d ON d.user_id = f.user_id
+    WHERE f.rn = 1
+    GROUP BY bucket ORDER BY bucket
+    """
+)
+buckets["reorder_rate_pct"] = (100 * buckets["reordered"] / buckets["users"]).round(2)
+
+fig2 = go.Figure(
+    go.Bar(
+        x=buckets["bucket"], y=buckets["reorder_rate_pct"], marker_color=COLOR_SERIES,
+        text=[f"{v:.1f}%" for v in buckets["reorder_rate_pct"]], textposition="outside",
+    )
+)
+fig2.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10), yaxis_title="reorder rate %")
+st.plotly_chart(fig2, width='stretch')
+st.dataframe(buckets, width='stretch', hide_index=True)
+
+chi2b, pb, dofb, _ = chi2_contingency(buckets[["reordered", "did_not_reorder"]].values)
+st.caption(
+    f"Chi-square: chi2={chi2b:.2f}, p={pb:.3f} — "
+    + ("**significant**, but non-monotonic (check the table — the highest bucket isn't the extreme "
+       "delivery time), so this is flagged as an open question, not a clean recommendation." if pb < 0.05
+       else "**not significant**: no measurable delivery-time-to-retention link in this data.")
+)
