@@ -3,6 +3,9 @@
 [![CI](https://github.com/shreyanshverma7/food-delivery-growth-retention-deep-dive/actions/workflows/ci.yml/badge.svg)](https://github.com/shreyanshverma7/food-delivery-growth-retention-deep-dive/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](requirements.txt)
+[![Live demo](https://img.shields.io/badge/live%20demo-streamlit-FF4B4B.svg)](https://food-delivery-growth-retention-deep-dive.streamlit.app/)
+
+**[Try the live dashboard →](https://food-delivery-growth-retention-deep-dive.streamlit.app/)**
 
 I analysed 6,387 orders from a food-delivery app (2,000 users, 300 restaurants, 7 cities, 2024) to find where users drop off in the funnel and which cohorts retain, then recommended where growth should invest.
 
@@ -119,7 +122,7 @@ The script also runs a **power analysis** for the stretch A/B test: detecting a 
 
 ![Dashboard screenshot](screenshots/dashboard.png)
 
-**Live demo:** not yet deployed — see "Deploy it live" below (~2 minutes on Streamlit Community Cloud, free).
+**[Live demo →](https://food-delivery-growth-retention-deep-dive.streamlit.app/)** — hosted free on Streamlit Community Cloud.
 
 A real multi-page app running live queries against `zomato.db`, not a static export:
 
@@ -136,11 +139,7 @@ pip install -r requirements.txt
 streamlit run streamlit_app/app.py
 ```
 
-**Deploy it live** (so the link works from a resume/LinkedIn, not just `git clone`):
-1. Push this repo to GitHub (already done if you're reading this on GitHub).
-2. Go to [share.streamlit.io](https://share.streamlit.io), sign in with GitHub, click "New app."
-3. Pick this repo, branch `main`, main file path `streamlit_app/app.py`. Deploy.
-4. Streamlit Cloud installs `requirements.txt` and serves the app at a public `*.streamlit.app` URL — paste that URL into this README once it's up.
+Deployed on [share.streamlit.io](https://share.streamlit.io) from this repo's `main` branch, main file path `streamlit_app/app.py` — Streamlit Cloud installs `requirements.txt` and redeploys automatically on every push to `main`.
 
 ## Stretch: simulated A/B test — [`sql/06_ab_test_checkout_simulation.sql`](sql/06_ab_test_checkout_simulation.sql), [`analysis/ab_test_simulation.py`](analysis/ab_test_simulation.py)
 
