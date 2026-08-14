@@ -2,7 +2,15 @@ import plotly.graph_objects as go
 import streamlit as st
 from scipy.stats import chi2_contingency
 
-from common import COLOR_CRITICAL, COLOR_SERIES, in_clause, render_sidebar_filters, run_query
+from common import (
+    COLOR_CRITICAL,
+    COLOR_SERIES,
+    PLOTLY_DARK_LAYOUT,
+    in_clause,
+    render_sidebar_filters,
+    run_query,
+    style_axes,
+)
 
 st.set_page_config(page_title="Funnel", layout="wide")
 st.title("Funnel: where users drop off")
@@ -41,7 +49,9 @@ fig.update_layout(
     xaxis_title="distinct users",
     height=380,
     margin=dict(l=10, r=10, t=10, b=10),
+    **PLOTLY_DARK_LAYOUT,
 )
+style_axes(fig)
 st.plotly_chart(fig, width='stretch')
 
 if funnel.iloc[0] > 0:

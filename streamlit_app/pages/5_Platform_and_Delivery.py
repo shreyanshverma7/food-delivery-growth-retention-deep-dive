@@ -2,7 +2,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from scipy.stats import chi2_contingency
 
-from common import COLOR_SERIES, render_sidebar_filters, run_query
+from common import COLOR_SERIES, PLOTLY_DARK_LAYOUT, render_sidebar_filters, run_query, style_axes
 
 st.set_page_config(page_title="Platform & Delivery", layout="wide")
 st.title("Platform & delivery-time deep dive")
@@ -28,7 +28,11 @@ fig = go.Figure(
         textposition="outside",
     )
 )
-fig.update_layout(height=260, margin=dict(l=10, r=10, t=10, b=10), xaxis_title="app_open → order_placed %")
+fig.update_layout(
+    height=260, margin=dict(l=10, r=10, t=10, b=10), xaxis_title="app_open → order_placed %",
+    **PLOTLY_DARK_LAYOUT,
+)
+style_axes(fig)
 st.plotly_chart(fig, width='stretch')
 
 chi2, p, dof, _ = chi2_contingency(by_platform[["converted", "not_converted"]].values)
@@ -72,7 +76,11 @@ fig2 = go.Figure(
         text=[f"{v:.1f}%" for v in buckets["reorder_rate_pct"]], textposition="outside",
     )
 )
-fig2.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10), yaxis_title="reorder rate %")
+fig2.update_layout(
+    height=280, margin=dict(l=10, r=10, t=10, b=10), yaxis_title="reorder rate %",
+    **PLOTLY_DARK_LAYOUT,
+)
+style_axes(fig2)
 st.plotly_chart(fig2, width='stretch')
 st.dataframe(buckets, width='stretch', hide_index=True)
 

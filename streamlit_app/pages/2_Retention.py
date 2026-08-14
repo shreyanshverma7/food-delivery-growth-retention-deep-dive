@@ -2,7 +2,15 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import SEQUENTIAL_SCALE, render_sidebar_filters, run_query
+from common import (
+    COLOR_MUTED,
+    PLOTLY_DARK_LAYOUT,
+    SEQUENTIAL_SCALE,
+    cell_text_color,
+    render_sidebar_filters,
+    run_query,
+    style_axes,
+)
 
 st.set_page_config(page_title="Retention", layout="wide")
 st.title("Cohort retention")
@@ -53,19 +61,14 @@ observable = np.array(
     [[months_after(cm, i + 1) <= last_month for i in range(3)] for cm in df["cohort_month"]]
 )
 z_masked = np.where(observable, z, np.nan)
-text = [
-    [f"{z[i][j]:.1f}%" if observable[i][j] else "–" for j in range(len(cols))]
-    for i in range(len(df))
-]
+col_labels = ["M+1", "M+2", "M+3"]
 
 fig = go.Figure(
     go.Heatmap(
         z=z_masked,
-        x=["M+1", "M+2", "M+3"],
+        x=col_labels,
         y=df["cohort_month"],
         colorscale=SEQUENTIAL_SCALE,
-        text=text,
-        texttemplate="%{text}",
         hovertemplate="%{y} cohort, %{x}: %{z:.2f}%<extra></extra>",
         colorbar=dict(title="retained %"),
     )
@@ -74,7 +77,26 @@ fig.update_layout(
     yaxis=dict(autorange="reversed"),
     height=460,
     margin=dict(l=10, r=10, t=10, b=10),
+    **PLOTLY_DARK_LAYOUT,
 )
+style_axes(fig)
+
+# Per-cell annotations instead of a uniform texttemplate: the dark-mode
+# sequential ramp runs dark-to-light with rising value, so a single fixed
+# text color would lose contrast at one end of the scale.
+for i, cohort_month in enumerate(df["cohort_month"]):
+    for j, col in enumerate(col_labels):
+        if observable[i][j]:
+            fig.add_annotation(
+                x=col, y=cohort_month, text=f"{z[i][j]:.1f}%", showarrow=False,
+                font=dict(color=cell_text_color(z[i][j]), size=12),
+            )
+        else:
+            fig.add_annotation(
+                x=col, y=cohort_month, text="–", showarrow=False,
+                font=dict(color=COLOR_MUTED, size=12),
+            )
+
 st.plotly_chart(fig, width='stretch')
 st.caption(
     f"Blank cells (–) fall after {last_month}, the last month with data — not yet observable, "
