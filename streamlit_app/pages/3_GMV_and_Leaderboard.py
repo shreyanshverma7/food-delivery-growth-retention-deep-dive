@@ -1,7 +1,7 @@
 import plotly.graph_objects as go
 import streamlit as st
 
-from common import COLOR_SERIES, in_clause, render_sidebar_filters, run_query
+from common import COLOR_SERIES, PLOTLY_DARK_LAYOUT, in_clause, render_sidebar_filters, run_query, style_axes
 
 st.set_page_config(page_title="GMV & Leaderboard", layout="wide")
 st.title("GMV drivers")
@@ -26,10 +26,14 @@ fig = go.Figure(
     go.Scatter(
         x=monthly["ym"], y=monthly["gmv"], mode="lines+markers",
         line=dict(color=COLOR_SERIES, width=2), fill="tozeroy",
-        fillcolor="rgba(42,120,214,0.1)",
+        fillcolor="rgba(57,135,229,0.15)",
     )
 )
-fig.update_layout(height=320, margin=dict(l=10, r=10, t=10, b=10), yaxis_title="delivered GMV ($)")
+fig.update_layout(
+    height=320, margin=dict(l=10, r=10, t=10, b=10), yaxis_title="delivered GMV ($)",
+    **PLOTLY_DARK_LAYOUT,
+)
+style_axes(fig)
 st.plotly_chart(fig, width='stretch')
 
 st.subheader("City leaderboard")
@@ -53,7 +57,9 @@ fig2 = go.Figure(
 fig2.update_layout(
     yaxis=dict(autorange="reversed"), height=320, margin=dict(l=10, r=10, t=10, b=10),
     xaxis_title="delivered revenue ($)",
+    **PLOTLY_DARK_LAYOUT,
 )
+style_axes(fig2)
 st.plotly_chart(fig2, width='stretch')
 
 st.subheader("Drill down: top restaurants in a city")

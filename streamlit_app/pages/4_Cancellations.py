@@ -2,7 +2,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from scipy.stats import chi2_contingency
 
-from common import COLOR_SERIES, in_clause, render_sidebar_filters, run_query
+from common import COLOR_SERIES, PLOTLY_DARK_LAYOUT, in_clause, render_sidebar_filters, run_query, style_axes
 
 st.set_page_config(page_title="Cancellations", layout="wide")
 st.title("Cancellation revenue at risk")
@@ -23,7 +23,9 @@ def bar_with_significance(df, label_col, title):
     fig.update_layout(
         yaxis=dict(autorange="reversed"), height=280, margin=dict(l=10, r=10, t=30, b=10),
         xaxis_title="cancellation rate %", title=title,
+        **PLOTLY_DARK_LAYOUT,
     )
+    style_axes(fig)
     st.plotly_chart(fig, width='stretch')
     st.dataframe(df, width='stretch', hide_index=True)
 

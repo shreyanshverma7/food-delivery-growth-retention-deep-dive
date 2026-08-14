@@ -11,15 +11,54 @@ DB_PATH = Path(__file__).parent.parent / "database" / "zomato.db"
 
 # Single-hue sequential blue + one status color, matching the repo's static
 # dashboard (see the dataviz palette this project used: references/palette.md
-# in the dataviz skill). Kept as plain constants here since Plotly doesn't
-# consume CSS custom properties.
-COLOR_SERIES = "#2a78d6"
-COLOR_SERIES_DARK = "#184f95"
+# in the dataviz skill). These are the validated DARK-surface tokens (the app
+# runs dark-only — see .streamlit/config.toml) recovered from that same
+# earlier dark-mode pass, not re-invented.
+COLOR_SERIES = "#3987e5"
+COLOR_CRITICAL = "#e66767"
 COLOR_MUTED = "#898781"
-COLOR_CRITICAL = "#d03b3b"
+COLOR_SURFACE = "#1a1a19"
+COLOR_GRIDLINE = "#2c2c2a"
+COLOR_TEXT = "#ffffff"
 SEQUENTIAL_SCALE = [
-    [0.0, "#cde2fb"], [0.25, "#6da7ec"], [0.5, "#2a78d6"], [0.75, "#1c5cab"], [1.0, "#0d366b"],
+    [0.0, "#184f95"], [0.25, "#256abf"], [0.5, "#3987e5"], [0.75, "#5598e7"], [1.0, "#b7d3f6"],
 ]
+
+# Plotly defaults to a white chart background regardless of Streamlit's own
+# theme, so every figure needs this merged in explicitly or it renders as a
+# bright box on the dark page.
+PLOTLY_DARK_LAYOUT = dict(
+    paper_bgcolor=COLOR_SURFACE, plot_bgcolor=COLOR_SURFACE, font=dict(color=COLOR_TEXT)
+)
+
+
+def style_axes(fig):
+    fig.update_xaxes(gridcolor=COLOR_GRIDLINE, zerolinecolor="#383835", linecolor="#383835")
+    fig.update_yaxes(gridcolor=COLOR_GRIDLINE, zerolinecolor="#383835", linecolor="#383835")
+
+
+def _lerp_color(c1, c2, t):
+    c1 = tuple(int(c1[i:i + 2], 16) for i in (1, 3, 5))
+    c2 = tuple(int(c2[i:i + 2], 16) for i in (1, 3, 5))
+    return tuple(round(c1[k] + (c2[k] - c1[k]) * t) for k in range(3))
+
+
+def _scale_color(t, scale):
+    t = max(0.0, min(1.0, t))
+    for (pos0, col0), (pos1, col1) in zip(scale, scale[1:]):
+        if pos0 <= t <= pos1:
+            step = 0 if pos1 == pos0 else (t - pos0) / (pos1 - pos0)
+            return _lerp_color(col0, col1, step)
+    return _lerp_color(scale[-1][1], scale[-1][1], 0)
+
+
+def cell_text_color(pct, scale=SEQUENTIAL_SCALE, light="#ffffff", dark="#0b0b0b"):
+    """Picks readable text color for a value plotted against a continuous
+    sequential heatmap fill — the dark-mode ramp runs dark-to-light with
+    rising value, so a fixed text color loses contrast at one end."""
+    r, g, b = _scale_color(pct / 100, scale)
+    luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+    return dark if luminance > 0.45 else light
 
 
 @st.cache_resource
