@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Regenerate the database (must run clean, deterministic seed)
+        run: python3 database/build_zomato_db.py
+
+      - name: Run every SQL deliverable against the database
+        run: |
+          set -e
+          for f in sql/*.sql; do
+            echo "== $f =="
+            sqlite3 database/zomato.db < "$f" > /dev/null
+          done
+
+      - name: Compile-check the Streamlit app
+        run: python3 -m py_compile streamlit_app/app.py streamlit_app/common.py streamlit_app/pages/*.py
+
+      - name: Run the stretch A/B test simulation
+        run: python3 analysis/ab_test_simulation.py
+
+      - name: Run the statistical rigor pass
+        run: python3 analysis/statistical_tests.py
+
+      - name: Smoke-test the Streamlit app boots and every page responds
+        run: |
+          set -e
+          streamlit run streamlit_app/app.py --server.headless true --server.port 8501 &
+          APP_PID=$!
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:8501 > /dev/null && break
+            sleep 1
+          done
+          for page in "" Funnel Retention GMV_and_Leaderboard Cancellations Platform_and_Delivery Statistical_Tests SQL_Playground; do
+            echo "checking /$page"
+            curl -sf "http://localhost:8501/$page" > /dev/null
+          done
+          kill $APP_PID
