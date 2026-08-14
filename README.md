@@ -1,5 +1,9 @@
 # Food-Delivery Growth & Retention Deep-Dive
 
+[![CI](https://github.com/shreyanshverma7/food-delivery-growth-retention-deep-dive/actions/workflows/ci.yml/badge.svg)](https://github.com/shreyanshverma7/food-delivery-growth-retention-deep-dive/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](requirements.txt)
+
 I analysed 6,387 orders from a food-delivery app (2,000 users, 300 restaurants, 7 cities, 2024) to find where users drop off in the funnel and which cohorts retain, then recommended where growth should invest.
 
 ## Top 3 findings
