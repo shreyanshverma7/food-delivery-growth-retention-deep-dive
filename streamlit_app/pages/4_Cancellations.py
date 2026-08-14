@@ -2,9 +2,19 @@ import plotly.graph_objects as go
 import streamlit as st
 from scipy.stats import chi2_contingency
 
-from common import COLOR_SERIES, PLOTLY_DARK_LAYOUT, in_clause, render_sidebar_filters, run_query, style_axes
+from common import (
+    COLOR_SERIES,
+    PLOTLY_DARK_LAYOUT,
+    in_clause,
+    inject_css,
+    render_sidebar_filters,
+    render_stat_tile,
+    run_query,
+    style_axes,
+)
 
-st.set_page_config(page_title="Cancellations", layout="wide")
+st.set_page_config(page_title="Cancellations · Food Delivery Analytics", page_icon="🛵", layout="wide")
+inject_css()
 st.title("Cancellation revenue at risk")
 
 f = render_sidebar_filters()
@@ -36,43 +46,51 @@ def bar_with_significance(df, label_col, title):
         st.caption(f"Chi-square test (live, on current filters): chi2={chi2:.2f}, p={p:.4f} — **{verdict}** at alpha=0.05.")
 
 
-st.subheader("By city")
-by_city = run_query(
-    f"""
-    SELECT u.city,
-           SUM(CASE WHEN o.order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered,
-           SUM(CASE WHEN o.order_status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
-           SUM(CASE WHEN o.order_status = 'cancelled' THEN o.order_amount ELSE 0 END) AS revenue_at_risk
-    FROM orders o JOIN users u ON u.user_id = o.user_id
-    WHERE strftime('%Y-%m', o.order_date) BETWEEN ? AND ?
-      AND u.city IN ({city_ph}) AND o.payment_method IN ({pay_ph})
-    GROUP BY u.city
-    """,
-    (f["month_start"], f["month_end"], *city_params, *pay_params),
-)
+with st.spinner("Loading cancellations…"):
+    by_city = run_query(
+        f"""
+        SELECT u.city,
+               SUM(CASE WHEN o.order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered,
+               SUM(CASE WHEN o.order_status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+               SUM(CASE WHEN o.order_status = 'cancelled' THEN o.order_amount ELSE 0 END) AS revenue_at_risk
+        FROM orders o JOIN users u ON u.user_id = o.user_id
+        WHERE strftime('%Y-%m', o.order_date) BETWEEN ? AND ?
+          AND u.city IN ({city_ph}) AND o.payment_method IN ({pay_ph})
+        GROUP BY u.city
+        """,
+        (f["month_start"], f["month_end"], *city_params, *pay_params),
+    )
+    by_payment = run_query(
+        f"""
+        SELECT o.payment_method,
+               SUM(CASE WHEN o.order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered,
+               SUM(CASE WHEN o.order_status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+               SUM(CASE WHEN o.order_status = 'cancelled' THEN o.order_amount ELSE 0 END) AS revenue_at_risk
+        FROM orders o JOIN users u ON u.user_id = o.user_id
+        WHERE strftime('%Y-%m', o.order_date) BETWEEN ? AND ?
+          AND u.city IN ({city_ph}) AND o.payment_method IN ({pay_ph})
+        GROUP BY o.payment_method
+        """,
+        (f["month_start"], f["month_end"], *city_params, *pay_params),
+    )
+
 by_city["cancel_rate_pct"] = (100 * by_city["cancelled"] / (by_city["delivered"] + by_city["cancelled"])).round(2)
 by_city["revenue_at_risk"] = by_city["revenue_at_risk"].round(2)
-bar_with_significance(by_city, "city", "Cancellation rate by city")
-
-st.subheader("By payment method")
-by_payment = run_query(
-    f"""
-    SELECT o.payment_method,
-           SUM(CASE WHEN o.order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered,
-           SUM(CASE WHEN o.order_status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
-           SUM(CASE WHEN o.order_status = 'cancelled' THEN o.order_amount ELSE 0 END) AS revenue_at_risk
-    FROM orders o JOIN users u ON u.user_id = o.user_id
-    WHERE strftime('%Y-%m', o.order_date) BETWEEN ? AND ?
-      AND u.city IN ({city_ph}) AND o.payment_method IN ({pay_ph})
-    GROUP BY o.payment_method
-    """,
-    (f["month_start"], f["month_end"], *city_params, *pay_params),
-)
 by_payment["cancel_rate_pct"] = (
     100 * by_payment["cancelled"] / (by_payment["delivered"] + by_payment["cancelled"])
 ).round(2)
 by_payment["revenue_at_risk"] = by_payment["revenue_at_risk"].round(2)
-bar_with_significance(by_payment, "payment_method", "Cancellation rate by payment method")
+
+st.subheader("By city")
+with st.container(border=True):
+    bar_with_significance(by_city, "city", "Cancellation rate by city")
+
+st.subheader("By payment method")
+with st.container(border=True):
+    bar_with_significance(by_payment, "payment_method", "Cancellation rate by payment method")
 
 total_risk = by_city["revenue_at_risk"].sum()
-st.metric("Total revenue at risk (current filters)", f"${total_risk/1e6:.2f}M" if total_risk >= 1e6 else f"${total_risk/1e3:.1f}K")
+render_stat_tile(
+    "Total revenue at risk (current filters)",
+    f"${total_risk/1e6:.2f}M" if total_risk >= 1e6 else f"${total_risk/1e3:.1f}K",
+)

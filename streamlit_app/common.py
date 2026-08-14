@@ -61,6 +61,43 @@ def cell_text_color(pct, scale=SEQUENTIAL_SCALE, light="#ffffff", dark="#0b0b0b"
     return dark if luminance > 0.45 else light
 
 
+def inject_css():
+    """Card styling for render_stat_tile(), reusing the same surface/border
+    tokens as the Plotly dark theme. Streamlit doesn't share injected CSS
+    across pages (each page is a fresh script run), so call this once near
+    the top of any page that uses render_stat_tile()."""
+    st.markdown(
+        """
+        <style>
+        .stat-tile {
+            background: #1a1a19; border: 1px solid rgba(255,255,255,0.10);
+            border-radius: 10px; padding: 16px 18px;
+        }
+        .stat-tile-label { font-size: 12.5px; color: #c3c2b7; margin-bottom: 6px; }
+        .stat-tile-value { font-size: 26px; font-weight: 600; line-height: 1.1; color: #ffffff; }
+        .stat-tile-delta { font-size: 13px; color: #898781; margin-left: 8px; font-weight: 400; }
+        .stat-tile-sub { font-size: 12px; color: #898781; margin-top: 4px; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_stat_tile(label, value, sub=None, delta=None):
+    delta_html = f'<span class="stat-tile-delta">{delta}</span>' if delta else ""
+    sub_html = f'<div class="stat-tile-sub">{sub}</div>' if sub else ""
+    st.markdown(
+        f"""
+        <div class="stat-tile">
+            <div class="stat-tile-label">{label}</div>
+            <div class="stat-tile-value">{value}{delta_html}</div>
+            {sub_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 @st.cache_resource
 def get_connection():
     # uri=True + mode=ro opens the file read-only at the SQLite/OS level —
@@ -113,6 +150,12 @@ def render_sidebar_filters():
     platforms = available_platforms()
 
     st.sidebar.header("Filters")
+    if st.sidebar.button("Reset filters", width='stretch'):
+        for key in ("f_months", "f_cities", "f_payments", "f_platforms"):
+            st.session_state.pop(key, None)
+        st.rerun()
+    st.sidebar.divider()
+
     month_range = st.sidebar.select_slider(
         "Month range", options=months, value=(months[0], months[-1]), key="f_months"
     )
