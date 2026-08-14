@@ -4,11 +4,11 @@ I analysed 6,387 orders from a food-delivery app (2,000 users, 300 restaurants, 
 
 ## Top 3 findings
 
-1. **The funnel's worst leak is checkout, not awareness.** Conversion falls from 67.2% to 54.8% between checkout and order_placed — the single biggest step-to-step drop in the funnel. More users are lost at the final payment step than anywhere earlier.
-2. **Cancellations are the single biggest lever in this dataset.** $1.24M of gross order value — 41.7% of delivered GMV — sits in cancelled orders, worst on UPI payments (32.2% cancellation rate) and in Pune (30.7%).
+1. **The funnel's worst leak is checkout, not awareness.** Conversion falls from 67.2% to 54.8% between checkout and order_placed — the single biggest step-to-step drop in the funnel, and platform (iOS/Android/Web) isn't the reason (see "Platform" below) — this is a checkout-flow problem, not a device-specific one.
+2. **Cancellations are the single biggest lever in this dataset — but only the payment-method breakdown holds up statistically.** $1.24M of gross order value — 41.7% of delivered GMV — sits in cancelled orders. UPI's 32.2% cancellation rate vs. 26.8% for the best payment method **is statistically significant** (chi-square p=0.019); the city-to-city spread (Pune 30.7% vs. Delhi 28.6%) **is not** (p=0.95) — see "Statistical rigor pass" below. Chasing "Pune operations" would have been chasing noise.
 3. **Retention is genuinely improving, but the ceiling is still low.** Among cohorts with a full 3-month observation window (Jan–Sep signups), month-1 retention climbs from ~20% to ~38–44% over the year — a real trend — but even the best cohorts see fewer than half of signups place a second order.
 
-**Recommendation:** prioritize a checkout-flow fix and a cancellation root-cause investigation (UPI payment failures, Pune operations) over further top-of-funnel acquisition spend — cancellations alone are worth more than most funnel or retention tweaks combined.
+**Recommendation:** prioritize a checkout-flow fix and a UPI-specific cancellation investigation (payment failures/fraud checks, not a city-ops issue) over further top-of-funnel acquisition spend — cancellations alone are worth more than most funnel or retention tweaks combined.
 
 ## Data
 
@@ -24,7 +24,7 @@ A synthetic Zomato-style dataset (`database/build_zomato_db.py`, seed 42 — ful
 
 GMV figures throughout exclude cancelled orders unless explicitly labeled "revenue at risk."
 
-## The 5 questions
+## The 7 questions
 
 ### 1. Funnel: where's the biggest drop-off? — [`sql/01_funnel_dropoff.sql`](sql/01_funnel_dropoff.sql)
 
@@ -75,6 +75,42 @@ The top 5% of users (79 people) generate **17.19%** of total delivered GMV ($510
 
 By payment method, UPI is worst at 32.21% cancelled (vs. 26.82% for NetBanking, the best). Total revenue at risk across all cancelled orders: **$1.24M — 41.7% of delivered GMV.**
 
+**Caveat, confirmed in the statistical rigor pass below:** the city-to-city spread above (28.6%–30.7%) is *not* statistically significant (chi-square p=0.95) — with 850–985 orders per city, that range is what you'd expect from noise alone. The payment-method spread *is* significant (p=0.019). Don't action the city ranking; do action UPI.
+
+### 6. Platform: does the funnel leak differently by device? — [`sql/07_platform_funnel.sql`](sql/07_platform_funnel.sql)
+
+| Platform | app_open | order_placed | Conversion |
+|---|---:|---:|---:|
+| iOS | 607 | 164 | 27.02% |
+| Android | 595 | 154 | 25.88% |
+| Web | 607 | 154 | 25.37% |
+
+Close enough to call — and a chi-square test confirms it (p=0.80, not significant). The checkout-flow problem from Q1 is universal, not concentrated on one platform, so there's no case here for a platform-specific fix.
+
+### 7. Does a slow first delivery cost you the second order? — [`sql/08_delivery_time_repeat_purchase.sql`](sql/08_delivery_time_repeat_purchase.sql)
+
+| First-order delivery time | Users | Reorder rate |
+|---|---:|---:|
+| <30 min | 318 | 64.15% |
+| 30–44 min | 396 | 57.07% |
+| 45–59 min | 420 | 68.33% |
+| 60+ min | 427 | 61.83% |
+
+The reorder rate does vary significantly by bucket (chi-square p=0.009) — but **not in a clean "slower delivery = fewer reorders" line**: the 45–59 min bucket has the *highest* reorder rate, and 30–44 min has the lowest. Statistically real, but not a story to build a delivery-speed initiative on without digging further — this is flagged as an open question, not a recommendation.
+
+### Statistical rigor pass — [`analysis/statistical_tests.py`](analysis/statistical_tests.py)
+
+Every rate comparison above was point-estimated first, then chi-square tested for whether the spread is distinguishable from chance:
+
+| Comparison | p-value | Verdict |
+|---|---:|---|
+| Cancellation rate by city | 0.951 | Not significant — noise |
+| Cancellation rate by payment method | 0.019 | **Significant** — UPI is really worse |
+| app_open→order_placed conversion by platform | 0.800 | Not significant — noise |
+| Reorder rate by first-delivery-time bucket | 0.009 | **Significant**, but non-monotonic |
+
+The script also runs a **power analysis** for the stretch A/B test: detecting a +6pp lift on the real 54.76% baseline at 80% power needs **~1,060 users per group** — the real checkout population (862 total, ~431/group) is well short of that, which is exactly why [the simulated A/B test](analysis/ab_test_simulation.py) came back non-significant. At the actual sample size available, only a lift of roughly +10pp or more would be reliably detectable.
+
 ## Dashboard
 
 ![Dashboard screenshot](screenshots/dashboard.png)
@@ -100,6 +136,9 @@ The instructive result: at this sample size (~430/group), even a 6-point lift on
 ## Reproduce
 
 ```bash
+# install dependencies (scipy for the statistical rigor pass)
+pip install -r requirements.txt
+
 # regenerate the database (deterministic, seed 42)
 python3 database/build_zomato_db.py
 
@@ -111,4 +150,7 @@ python3 dashboard/build_dashboard_data.py
 
 # run the stretch A/B test simulation
 python3 analysis/ab_test_simulation.py
+
+# run the statistical rigor pass (chi-square tests + A/B power analysis)
+python3 analysis/statistical_tests.py
 ```
