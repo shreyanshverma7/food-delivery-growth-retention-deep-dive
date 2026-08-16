@@ -2,7 +2,14 @@ import plotly.graph_objects as go
 import streamlit as st
 from scipy.stats import chi2_contingency
 
-from common import COLOR_SERIES, PLOTLY_DARK_LAYOUT, render_sidebar_filters, run_query, style_axes
+from common import (
+    COLOR_SERIES,
+    PLOTLY_DARK_LAYOUT,
+    render_sidebar_filters,
+    render_significance_caption,
+    run_query,
+    style_axes,
+)
 
 st.set_page_config(page_title="Platform & Delivery · Food Delivery Analytics", page_icon="🛵", layout="wide")
 st.title("Platform & delivery-time deep dive")
@@ -64,10 +71,9 @@ with st.container(border=True):
     st.plotly_chart(fig, width='stretch')
 
     chi2, p, dof, _ = chi2_contingency(by_platform[["converted", "not_converted"]].values)
-    st.caption(
-        f"Chi-square: chi2={chi2:.2f}, p={p:.3f} — "
-        + ("**significant**: platform is a real driver here." if p < 0.05
-           else "**not significant**: platforms convert the same, within noise.")
+    render_significance_caption(
+        chi2, p,
+        note_if_not="Platforms convert the same, within noise.",
     )
 
 st.divider()
@@ -88,9 +94,12 @@ with st.container(border=True):
     st.dataframe(buckets, width='stretch', hide_index=True)
 
     chi2b, pb, dofb, _ = chi2_contingency(buckets[["reordered", "did_not_reorder"]].values)
-    st.caption(
-        f"Chi-square: chi2={chi2b:.2f}, p={pb:.3f} — "
-        + ("**significant**, but non-monotonic (check the table — the highest bucket isn't the extreme "
-           "delivery time), so this is flagged as an open question, not a clean recommendation." if pb < 0.05
-           else "**not significant**: no measurable delivery-time-to-retention link in this data.")
+    render_significance_caption(
+        chi2b, pb,
+        note_if_significant="This is the only comparison in the family that clears the corrected "
+                            "threshold — and it is still not actionable: the buckets are "
+                            "non-monotonic (the fastest bucket doesn't reorder best), and the "
+                            "generator draws delivery time independently of everything else, so "
+                            "the true effect is zero. Open question, not a recommendation.",
+        note_if_not="No measurable delivery-time-to-retention link in this data.",
     )

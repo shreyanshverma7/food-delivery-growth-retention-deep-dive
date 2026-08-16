@@ -44,7 +44,7 @@ with st.container(border=True):
         )
     )
     fig.update_layout(
-        height=320, margin=dict(l=10, r=10, t=10, b=10), yaxis_title="delivered GMV ($)",
+        height=320, margin=dict(l=10, r=10, t=10, b=10), yaxis_title="delivered GMV (₹)",
         **PLOTLY_DARK_LAYOUT,
     )
     style_axes(fig)
@@ -55,12 +55,12 @@ with st.container(border=True):
     fig2 = go.Figure(
         go.Bar(
             x=by_city["revenue"], y=by_city["city"], orientation="h", marker_color=COLOR_SERIES,
-            text=[f"${v:,.0f}" for v in by_city["revenue"]], textposition="outside",
+            text=[f"₹{v:,.0f}" for v in by_city["revenue"]], textposition="outside",
         )
     )
     fig2.update_layout(
         yaxis=dict(autorange="reversed"), height=320, margin=dict(l=10, r=10, t=10, b=10),
-        xaxis_title="delivered revenue ($)",
+        xaxis_title="delivered revenue (₹)",
         **PLOTLY_DARK_LAYOUT,
     )
     style_axes(fig2)

@@ -3,6 +3,21 @@ Statistical rigor pass: are the differences we're citing in the README real,
 or noise? Every headline number in the SQL deliverables is a point estimate;
 this script checks which ones survive a significance test at realistic
 sample sizes, and sizes the A/B test properly instead of eyeballing p-values.
+
+Two things this pass deliberately does NOT let itself get away with:
+
+1. Multiple comparisons. Four chi-square tests run here. Judged individually at
+   alpha=0.05, the chance that at least one crosses by luck alone is
+   1 - 0.95**4 = ~18.5%. Every verdict below is therefore reported twice: at the
+   naive threshold and at the Bonferroni-corrected one.
+2. Knowing the ground truth. This database is synthetic and *we wrote the
+   generator* — see database/build_zomato_db.py, where order_status,
+   payment_method, delivery_time_min and order_amount are four independent
+   random draws (lines ~147-150), and city and platform are independent per-user
+   draws. So the true effect size in all four tests is exactly zero. Anything
+   that comes back "significant" here is a Type I error by construction. That is
+   the point: the pipeline is the deliverable, and on real data it would surface
+   real effects. See the README's "Ground truth" section.
 """
 
 import sqlite3
@@ -11,6 +26,20 @@ from pathlib import Path
 from scipy.stats import chi2_contingency, norm
 
 DB_PATH = Path(__file__).parent.parent / "database" / "zomato.db"
+
+# Duplicated from streamlit_app/common.py on purpose: this file runs as a
+# standalone script and Streamlit puts streamlit_app/ (not the repo root) on
+# sys.path, so a shared import would need a path hack. Keep the two in sync.
+COMPARISON_FAMILY_SIZE = 4
+BONFERRONI_ALPHA = 0.05 / COMPARISON_FAMILY_SIZE  # 0.0125
+
+
+def report(p):
+    """Prints the naive and Bonferroni-corrected calls for one test."""
+    raw = "SIGNIFICANT" if p < 0.05 else "not significant"
+    corrected = "SIGNIFICANT" if p < BONFERRONI_ALPHA else "not significant"
+    print(f"  alpha = 0.05              -> {raw}")
+    print(f"  Bonferroni 0.05/{COMPARISON_FAMILY_SIZE} = {BONFERRONI_ALPHA:.4f} -> {corrected}")
 
 
 def chi_square_on_groups(con, group_col, group_table_sql):
@@ -33,8 +62,9 @@ def test_cancellation_by_city(con):
     labels, table, chi2, p, dof = chi_square_on_groups(con, "city", sql)
     print("Cancellation rate by CITY")
     print(f"  chi2 = {chi2:.3f}, dof = {dof}, p = {p:.4f}")
-    print(f"  -> {'SIGNIFICANT' if p < 0.05 else 'NOT significant'} at alpha=0.05: the city-to-city"
-          f" differences in the README {'reflect a real effect.' if p < 0.05 else 'are consistent with random noise.'}")
+    report(p)
+    print("  -> The city-to-city spread in the README is consistent with random noise."
+          " Don't action the city ranking.")
     print()
 
 
@@ -49,9 +79,13 @@ def test_cancellation_by_payment(con):
     labels, table, chi2, p, dof = chi_square_on_groups(con, "payment_method", sql)
     print("Cancellation rate by PAYMENT METHOD")
     print(f"  chi2 = {chi2:.3f}, dof = {dof}, p = {p:.4f}")
-    print(f"  -> {'SIGNIFICANT' if p < 0.05 else 'NOT significant'} at alpha=0.05: the payment-method"
-          f" differences {'reflect a real effect' if p < 0.05 else 'are consistent with random noise'}"
-          f" — UPI's higher cancellation rate is {'likely real.' if p < 0.05 else 'not distinguishable from chance at this sample size.'}")
+    report(p)
+    print("  -> This is the test that most needs the correction. It clears the naive 0.05 bar"
+          " but not the")
+    print("     corrected one, and the generator assigns payment_method independently of"
+          " order_status,")
+    print("     so the true effect is zero. UPI's higher rate is a Type I error, not a finding"
+          " to action.")
     print()
 
 
@@ -67,8 +101,9 @@ def test_platform_conversion(con):
     labels, table, chi2, p, dof = chi_square_on_groups(con, "platform", sql)
     print("app_open -> order_placed conversion by PLATFORM")
     print(f"  chi2 = {chi2:.3f}, dof = {dof}, p = {p:.4f}")
-    print(f"  -> {'SIGNIFICANT' if p < 0.05 else 'NOT significant'} at alpha=0.05: iOS/Android/Web conversion"
-          f" {'differ for a real reason, worth investigating per-platform UX.' if p < 0.05 else 'is effectively the same platform-to-platform — no platform-specific funnel fix is indicated by this data.'}")
+    report(p)
+    print("  -> iOS/Android/Web convert the same within noise — no platform-specific funnel fix"
+          " is indicated.")
     print()
 
 
@@ -101,8 +136,13 @@ def test_delivery_time_reorder(con):
     labels, table, chi2, p, dof = chi_square_on_groups(con, "bucket", sql)
     print("Reorder rate by FIRST-ORDER DELIVERY-TIME bucket")
     print(f"  chi2 = {chi2:.3f}, dof = {dof}, p = {p:.4f}")
-    print(f"  -> {'SIGNIFICANT' if p < 0.05 else 'NOT significant'} at alpha=0.05: a slow first delivery"
-          f" {'measurably hurts repeat purchase in this data.' if p < 0.05 else 'shows no measurable effect on repeat purchase here — the bucket-to-bucket spread is noise, not a real delivery-quality-to-retention link.'}")
+    report(p)
+    print("  -> The only test that survives correction — and still not actionable. The buckets are"
+          " non-monotonic")
+    print("     (45-59 min reorders best, 30-44 min worst), and delivery_time_min is generated"
+          " independently of")
+    print("     everything else, so this is the family's surviving false positive. Open question,"
+          " not a recommendation.")
     print()
 
 
@@ -146,6 +186,15 @@ def main():
     print("=" * 76)
     print("STATISTICAL RIGOR PASS")
     print("=" * 76)
+    print(f"{COMPARISON_FAMILY_SIZE} chi-square tests in one family. Family-wise error rate at a naive"
+          " alpha=0.05:")
+    print(f"  1 - 0.95**{COMPARISON_FAMILY_SIZE} = {1 - 0.95 ** COMPARISON_FAMILY_SIZE:.1%} chance of at"
+          f" least one false positive. Bonferroni threshold: {BONFERRONI_ALPHA:.4f}")
+    print()
+    print("GROUND TRUTH: this database is synthetic and the generator (database/build_zomato_db.py)")
+    print("draws order_status, payment_method, delivery_time_min and city independently, so the true")
+    print("effect in every test below is exactly zero. Any 'significant' result here is a Type I")
+    print("error by construction. The method is the deliverable, not the findings.")
     print()
     test_cancellation_by_city(con)
     test_cancellation_by_payment(con)

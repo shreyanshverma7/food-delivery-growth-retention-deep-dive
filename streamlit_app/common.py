@@ -9,6 +9,48 @@ import streamlit as st
 
 DB_PATH = Path(__file__).parent.parent / "database" / "zomato.db"
 
+# Every rate comparison in this project belongs to one pre-registered family of
+# four chi-square tests: cancellation by city, cancellation by payment method,
+# app_open->order_placed conversion by platform, and reorder rate by first-order
+# delivery-time bucket. Judging each one against a naive alpha=0.05 gives a
+# 1 - 0.95**4 = ~18.5% chance that at least one pops purely by chance, so every
+# verdict in this app is reported against the corrected threshold as well.
+# Keep in sync with analysis/statistical_tests.py, which duplicates these (it
+# runs as a standalone script and can't import from this package).
+COMPARISON_FAMILY_SIZE = 4
+BONFERRONI_ALPHA = 0.05 / COMPARISON_FAMILY_SIZE  # 0.0125
+
+
+def significance_verdict(p):
+    """(raw_verdict, corrected_verdict, survives_correction) for one chi-square p.
+
+    Both verdicts are returned so callers can show the naive call *and* the
+    multiple-comparison-corrected one side by side, rather than collapsing to a
+    single word that overstates what one test in a family of four can support.
+    """
+    survives = p < BONFERRONI_ALPHA
+    raw = "significant" if p < 0.05 else "not significant"
+    corrected = "still significant" if survives else "not significant"
+    return raw, corrected, survives
+
+
+def render_significance_caption(chi2, p, note_if_significant=None, note_if_not=None):
+    """One consistent chi-square caption for every page: the naive call and the
+    Bonferroni-corrected one, never just the naive one on its own."""
+    raw, corrected, survives = significance_verdict(p)
+    st.caption(
+        f"Chi-square (live, on current filters): chi2={chi2:.2f}, p={p:.4f} — "
+        f"**{raw}** at alpha=0.05; **{corrected}** at the Bonferroni threshold of "
+        f"{BONFERRONI_ALPHA:.4f} (0.05 / {COMPARISON_FAMILY_SIZE} pre-registered comparisons). "
+        + ((note_if_significant or "") if survives else (note_if_not or ""))
+    )
+
+
+def fmt_money(v):
+    """Compact rupee formatting for KPI tiles. All amounts in this project are
+    synthetic INR (see the generator: order values are drawn from Rs 120-1,200)."""
+    return f"₹{v/1e6:.2f}M" if v >= 1e6 else f"₹{v/1e3:.1f}K"
+
 # Single-hue sequential blue + one status color, matching the repo's static
 # dashboard (see the dataviz palette this project used: references/palette.md
 # in the dataviz skill). These are the validated DARK-surface tokens (the app
@@ -69,14 +111,26 @@ def inject_css():
     st.markdown(
         """
         <style>
+        /* height:100% keeps a row of tiles symmetrical when one card's label or
+           sub-text wraps to an extra line. Harmless where a tile stands alone:
+           with no fixed height on the parent it resolves to auto. */
+        [data-testid="stColumn"], [data-testid="stColumn"] > div { height: 100%; }
         .stat-tile {
             background: #1a1a19; border: 1px solid rgba(255,255,255,0.10);
             border-radius: 10px; padding: 16px 18px;
+            height: 100%; box-sizing: border-box;
         }
         .stat-tile-label { font-size: 12.5px; color: #c3c2b7; margin-bottom: 6px; }
         .stat-tile-value { font-size: 26px; font-weight: 600; line-height: 1.1; color: #ffffff; }
         .stat-tile-delta { font-size: 13px; color: #898781; margin-left: 8px; font-weight: 400; }
         .stat-tile-sub { font-size: 12px; color: #898781; margin-top: 4px; }
+        /* Caveat line under a KPI row. Matches st.caption's type, but adds the
+           breathing room a caption doesn't get by default when it follows a
+           row of bordered cards. */
+        .kpi-note {
+            margin-top: 22px; font-size: 14px; line-height: 1.55;
+            color: rgba(255,255,255,0.60);
+        }
         </style>
         """,
         unsafe_allow_html=True,

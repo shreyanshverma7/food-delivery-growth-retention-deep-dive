@@ -8,6 +8,7 @@ from common import (
     PLOTLY_DARK_LAYOUT,
     in_clause,
     render_sidebar_filters,
+    render_significance_caption,
     run_query,
     style_axes,
 )
@@ -74,6 +75,12 @@ with st.container(border=True):
             f"Overall app_open → order_placed conversion: "
             f"**{100*funnel.iloc[-1]/funnel.iloc[0]:.1f}%**."
         )
+        st.caption(
+            "Caveat: the *shape* of this funnel is a property of the synthetic generator, which "
+            "draws each session's drop-off depth from a fixed weight vector — so \"checkout is the "
+            "worst leak\" is designed in, not discovered. The step-to-step drop-off method is what "
+            "transfers to real event data; the specific percentages are not a business finding."
+        )
 
 st.subheader("By platform")
 with st.container(border=True):
@@ -87,10 +94,8 @@ with st.container(border=True):
 
     if len(by_platform) >= 2:
         chi2, p, dof, _ = chi2_contingency(by_platform[["converted", "not_converted"]].values)
-        verdict = "significant" if p < 0.05 else "not significant"
-        st.caption(
-            f"Chi-square test across platforms: chi2={chi2:.2f}, p={p:.3f} — **{verdict}** at alpha=0.05. "
-            + ("Platform is a real driver of conversion here." if p < 0.05
-               else "The platform-to-platform spread is consistent with noise — this is a checkout-flow "
-                    "problem, not a device-specific one.")
+        render_significance_caption(
+            chi2, p,
+            note_if_not="The platform-to-platform spread is consistent with noise — this is a "
+                        "checkout-flow problem, not a device-specific one.",
         )
