@@ -5,9 +5,11 @@ from scipy.stats import chi2_contingency
 from common import (
     COLOR_SERIES,
     PLOTLY_DARK_LAYOUT,
+    fmt_money,
     in_clause,
     inject_css,
     render_sidebar_filters,
+    render_significance_caption,
     render_stat_tile,
     run_query,
     style_axes,
@@ -42,8 +44,11 @@ def bar_with_significance(df, label_col, title):
     if len(df) >= 2:
         table = df[["delivered", "cancelled"]].values
         chi2, p, dof, _ = chi2_contingency(table)
-        verdict = "significant" if p < 0.05 else "not significant (noise)"
-        st.caption(f"Chi-square test (live, on current filters): chi2={chi2:.2f}, p={p:.4f} — **{verdict}** at alpha=0.05.")
+        render_significance_caption(
+            chi2, p,
+            note_if_not="Not strong enough to survive correction for the project's four "
+                        "comparisons — don't action this ranking.",
+        )
 
 
 with st.spinner("Loading cancellations…"):
@@ -92,5 +97,13 @@ with st.container(border=True):
 total_risk = by_city["revenue_at_risk"].sum()
 render_stat_tile(
     "Total revenue at risk (current filters)",
-    f"${total_risk/1e6:.2f}M" if total_risk >= 1e6 else f"${total_risk/1e3:.1f}K",
+    fmt_money(total_risk),
+)
+st.caption(
+    "**Realism guardrail:** the ~29% cancellation rate is a constant baked into the data "
+    "generator (5 `delivered` to 2 `cancelled`), chosen so these queries return meaningful "
+    "volume — a real food-delivery business runs ~1–3%. Because order value is generated "
+    "independently of order status, the risk-to-GMV ratio has an expected value of exactly "
+    "(2/7)/(5/7) = 40%; the 41.7% observed is that constant plus noise, not a finding. The "
+    "transferable part is the method of sizing revenue-at-risk, not the level."
 )

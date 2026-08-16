@@ -1,5 +1,12 @@
 import streamlit as st
-from common import in_clause, inject_css, render_sidebar_filters, render_stat_tile, run_query
+from common import (
+    fmt_money,
+    in_clause,
+    inject_css,
+    render_sidebar_filters,
+    render_stat_tile,
+    run_query,
+)
 
 st.set_page_config(
     page_title="Overview · Food Delivery Analytics",
@@ -73,10 +80,6 @@ with st.spinner("Loading overview…"):
     ).iloc[0]
 
 
-def fmt_money(v):
-    return f"${v/1e6:.2f}M" if v >= 1e6 else f"${v/1e3:.1f}K"
-
-
 gmv, orders = gmv_row["gmv"] or 0, int(gmv_row["orders"] or 0)
 risk = risk_row["risk"] or 0
 opened, ordered = funnel_row["opened"] or 0, funnel_row["ordered"] or 0
@@ -113,6 +116,15 @@ with col4:
         delta=f"{100*risk/full_risk:.0f}% of full year",
     )
 
+# Full-width, so the guardrail sits next to the number it qualifies without
+# making the fourth tile taller than the other three.
+st.markdown(
+    '<div class="kpi-note">All amounts in ₹ (synthetic data). The ~29% cancellation rate behind '
+    '<em>revenue at risk</em> is a constant baked into the data generator — a real food-delivery '
+    'business runs ~1–3% — so treat the sizing method as the takeaway, not the level.</div>',
+    unsafe_allow_html=True,
+)
+
 st.divider()
 
 with st.container(border=True):
@@ -120,9 +132,15 @@ with st.container(border=True):
     st.markdown(
         """
 1. **The funnel's worst leak is checkout, not awareness.** Conversion falls from 67.2% to 54.8% between checkout and order_placed — the single biggest step-to-step drop — and platform isn't the reason.
-2. **Cancellations are the biggest lever — but only the payment-method breakdown holds up statistically.** $1.24M (41.7% of delivered GMV) sits in cancelled orders. UPI's higher cancellation rate is real (p=0.019); the city-to-city spread is not (p=0.95).
+2. **Cancellations size the biggest pool of at-risk revenue — but no breakdown survives multiple-comparison correction.** ₹1.24M (41.7% of delivered GMV) sits in cancelled orders. Neither the city spread (p=0.95) nor the payment-method spread (p=0.019, above the Bonferroni threshold of 0.0125) is actionable. See **Statistical Tests** for why, and for the ground truth on this synthetic data.
 3. **Retention is genuinely improving, but the ceiling is still low.** Month-1 retention climbs from ~20% to ~38–44% across cohorts with a full observation window — a real trend — but fewer than half of any cohort ever places a second order.
         """
+    )
+    st.caption(
+        "All amounts in ₹. This dataset is synthetic and the generator draws order status, "
+        "payment method, delivery time and city independently — so the true effect in every "
+        "significance test here is zero, and the rate *levels* (a ~29% cancel rate vs. ~1–3% in "
+        "the real world) are generator constants. What transfers is the method, not the numbers."
     )
 
 st.divider()

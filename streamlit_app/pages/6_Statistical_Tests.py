@@ -3,7 +3,15 @@ import math
 import streamlit as st
 from scipy.stats import chi2_contingency, norm
 
-from common import inject_css, render_sidebar_filters, render_stat_tile, run_query
+from common import (
+    BONFERRONI_ALPHA,
+    COMPARISON_FAMILY_SIZE,
+    inject_css,
+    render_sidebar_filters,
+    render_stat_tile,
+    run_query,
+    significance_verdict,
+)
 
 st.set_page_config(page_title="Statistical Tests · Food Delivery Analytics", page_icon="🛵", layout="wide")
 inject_css()
@@ -11,6 +19,18 @@ st.title("Statistical rigor pass")
 st.caption(
     "Every rate comparison in this project, chi-square tested for whether the spread is "
     "distinguishable from chance — plus a live power calculator for the A/B test."
+)
+
+st.warning(
+    f"**Read this before the p-values.** These {COMPARISON_FAMILY_SIZE} tests form one family. "
+    f"Judged individually at alpha=0.05, there is an "
+    f"{1 - 0.95 ** COMPARISON_FAMILY_SIZE:.1%} chance that at least one crosses by luck alone, so "
+    f"each is also reported against the Bonferroni threshold of {BONFERRONI_ALPHA:.4f}.\n\n"
+    "**And the ground truth:** this database is synthetic and the generator draws "
+    "`order_status`, `payment_method`, `delivery_time_min` and `city` independently of one "
+    "another — so the true effect in every test below is exactly **zero**. Anything that reads "
+    "\"significant\" here is a Type I error by construction. That is the point of the page: the "
+    "method is the deliverable. On real data this same pipeline would surface real effects."
 )
 render_sidebar_filters()
 
@@ -20,9 +40,12 @@ def run_chi2(label, sql):
     if len(df) < 2:
         return
     chi2, p, dof, _ = chi2_contingency(df.iloc[:, 1:3].values)
-    verdict = "SIGNIFICANT" if p < 0.05 else "not significant"
+    raw, corrected, survives = significance_verdict(p)
     with st.container(border=True):
-        st.markdown(f"**{label}** — chi2={chi2:.2f}, dof={dof}, p={p:.4f} — {verdict} at alpha=0.05")
+        st.markdown(
+            f"**{label}** — chi2={chi2:.2f}, dof={dof}, p={p:.4f}  \n"
+            f"alpha=0.05: **{raw}**  ·  Bonferroni {BONFERRONI_ALPHA:.4f}: **{corrected}**"
+        )
         with st.expander("Show underlying table"):
             st.dataframe(df, width='stretch', hide_index=True)
 
