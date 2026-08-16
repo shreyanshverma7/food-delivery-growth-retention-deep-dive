@@ -3,7 +3,9 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from common import (
+    COLOR_CRITICAL,
     COLOR_MUTED,
+    COLOR_SERIES,
     PLOTLY_DARK_LAYOUT,
     SEQUENTIAL_SCALE,
     cell_text_color,
@@ -15,6 +17,15 @@ from common import (
 st.set_page_config(page_title="Retention · Food Delivery Analytics", page_icon="🛵", layout="wide")
 st.title("Cohort retention")
 st.caption("% of each signup cohort placing a delivered order 1–3 calendar months after signup.")
+
+st.warning(
+    "**The rising trend below is exposure, not retention.** Every user's orders are spread "
+    "across the window between their signup date and the end of the data. A January user's "
+    "orders scatter over 11 months, so few land in February specifically; a November user has "
+    "~1 month left, so almost any order they place counts as \"month + 1\". Retention appears to "
+    "climb because the denominator of exposure shrinks. The chart at the bottom of this page "
+    "tests it directly against a zero-retention baseline."
+)
 
 f = render_sidebar_filters()
 
@@ -106,3 +117,69 @@ with st.container(border=True):
 
 with st.expander("Table view"):
     st.dataframe(df, width='stretch', hide_index=True)
+
+st.divider()
+st.subheader("Is any of it real? Observed vs. a zero-retention baseline")
+st.caption(
+    "For each user, the probability that at least one delivered order lands in month+1 *by "
+    "chance alone*, assuming order dates fall uniformly across their observable window: "
+    "`1 - (1 - p)^n`, where `p` is month+1's share of the window and `n` is their delivered "
+    "order count. Averaged per cohort, that is the retention curve a population with no "
+    "retention behaviour would produce. See `sql/09_retention_exposure_check.sql`."
+)
+
+with st.spinner("Computing exposure-adjusted baseline…"):
+    exposure = run_query(
+        """
+        WITH bounds AS (SELECT MAX(order_date) AS data_end FROM orders),
+        per_user AS (
+            SELECT
+                strftime('%Y-%m', u.signup_date) AS cohort_month,
+                julianday(b.data_end) - julianday(u.signup_date) + 1 AS window_days,
+                MAX(0,
+                    julianday(MIN(date(u.signup_date,'start of month','+2 month','-1 day'), b.data_end))
+                  - julianday(MAX(date(u.signup_date,'start of month','+1 month'), u.signup_date)) + 1
+                ) AS m1_days,
+                (SELECT COUNT(*) FROM orders o
+                  WHERE o.user_id = u.user_id AND o.order_status='delivered') AS n_delivered,
+                (SELECT COUNT(*) FROM orders o
+                  WHERE o.user_id = u.user_id AND o.order_status='delivered'
+                    AND strftime('%Y-%m', o.order_date)
+                      = strftime('%Y-%m', date(u.signup_date,'start of month','+1 month'))) > 0
+                  AS retained_m1
+            FROM users u CROSS JOIN bounds b
+        )
+        SELECT cohort_month,
+               ROUND(100.0 * SUM(retained_m1)/COUNT(*), 1) AS observed,
+               ROUND(100.0 * AVG(1 - POWER(1 - (m1_days/window_days), n_delivered)), 1) AS expected
+        FROM per_user GROUP BY cohort_month ORDER BY cohort_month
+        """
+    )
+
+with st.container(border=True):
+    fig2 = go.Figure()
+    fig2.add_trace(go.Scatter(
+        x=exposure["cohort_month"], y=exposure["observed"], name="Observed M+1 retention",
+        mode="lines+markers", line=dict(color=COLOR_SERIES, width=2),
+    ))
+    fig2.add_trace(go.Scatter(
+        x=exposure["cohort_month"], y=exposure["expected"], name="Expected if retention were zero",
+        mode="lines+markers", line=dict(color=COLOR_CRITICAL, width=2, dash="dash"),
+    ))
+    fig2.update_layout(
+        height=340, margin=dict(l=10, r=10, t=10, b=10),
+        yaxis_title="month-1 retention %", xaxis_title="signup cohort",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+        **PLOTLY_DARK_LAYOUT,
+    )
+    style_axes(fig2)
+    st.plotly_chart(fig2, width='stretch')
+
+    gap = (exposure["observed"] - exposure["expected"]).abs().mean()
+    st.caption(
+        f"Mean absolute gap: **{gap:.1f} percentage points**, with no systematic direction — the "
+        "observed curve is reproduced by a model containing no retention behaviour at all. The "
+        "apparent improvement across 2024 is a data-window artifact end to end, not a product "
+        "signal. On real data this same exposure-adjusted baseline is what separates a genuine "
+        "retention trend from one manufactured by the observation window."
+    )
