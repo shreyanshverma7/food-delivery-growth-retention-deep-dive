@@ -1,0 +1,82 @@
+name: Bug report
+description: Something in the SQL, the analysis scripts, or the dashboard is wrong or broken
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. If the issue is that a **number looks wrong**, please check the README's
+        *Reading these numbers honestly* section first — several figures in this project are known
+        artifacts of the synthetic data generator and are documented as such.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where is it?
+      options:
+        - SQL deliverable (sql/)
+        - Statistical analysis (analysis/)
+        - Streamlit dashboard (streamlit_app/)
+        - Data generator (database/)
+        - README / documentation
+        - CI
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see?
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How can I reproduce it?
+      description: Exact command, query, or the page and filter settings you used.
+      placeholder: |
+        1. Run from the repo root: streamlit run streamlit_app/app.py
+        2. Go to the Cancellations page
+        3. Deselect all cities except Pune
+        4. The chi-square caption shows ...
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+      description: Output of `git rev-parse --short HEAD`, or the release tag. Say "live demo" if you saw it on the hosted app.
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Python version and OS, if running locally.
+      placeholder: "Python 3.11.9, macOS 15.5"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I ran this from the repo root (not from inside `streamlit_app/`)
+          required: false
+        - label: I checked this isn't a documented synthetic-data artifact
+          required: false

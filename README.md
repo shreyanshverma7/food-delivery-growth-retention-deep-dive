@@ -235,3 +235,25 @@ python3 analysis/ab_test_simulation.py
 # run the statistical rigor pass (chi-square tests + A/B power analysis)
 python3 analysis/statistical_tests.py
 ```
+
+Run everything from the **repo root**. `.streamlit/config.toml` lives there, and launching from inside `streamlit_app/` silently loads no theme.
+
+Rebuilding the database is optional — `database/zomato.db` is committed because the hosted demo serves it. CI asserts the committed copy is still reproducible from the generator by comparing logical dumps in a temp directory.
+
+## Contributing
+
+Contributions are welcome — new SQL deliverables, additional statistical checks, and tests especially. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the verification steps CI runs, and branch/commit conventions.
+
+Good places to start:
+
+- [`good first issue`](../../labels/good%20first%20issue) — scoped, self-contained tasks
+- [`help wanted`](../../labels/help%20wanted) — bigger pieces, including the missing test suite
+- [Discussions](../../discussions) — questions about the methodology or the synthetic data
+
+One thing worth reading first: this project's dataset is synthetic and the generator is in the repo, so **any finding has to be defensible against it**. The [*Reading these numbers honestly*](#reading-these-numbers-honestly-what-this-synthetic-data-can-and-cant-support) section explains why, and documents two claims that turned out to be artifacts.
+
+By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md). Security issues go through [SECURITY.md](SECURITY.md), privately — not public issues.
+
+## License
+
+[MIT](LICENSE) © Shreyansh Verma

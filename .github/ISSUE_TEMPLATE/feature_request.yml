@@ -1,0 +1,65 @@
+name: Feature or analysis idea
+description: Propose a new SQL deliverable, statistical check, or dashboard capability
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        New analyses are very welcome. One thing to keep in mind: the dataset is synthetic and the
+        generator (`database/build_zomato_db.py`) draws most fields independently, so the true effect
+        in most comparisons is zero. A proposal that says what the generator implies about the result
+        is much easier to accept than one that doesn't.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of addition?
+      options:
+        - New SQL deliverable (a business question)
+        - New statistical check or correction
+        - Dashboard page or visualization
+        - Data generator improvement
+        - Tests / tooling / CI
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What question does it answer, or what problem does it solve?
+      description: The business or methodological question, not the implementation.
+      placeholder: "Do higher-rated restaurants have lower cancellation rates?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: approach
+    attributes:
+      label: Proposed approach
+      description: The query shape, test, or UI you have in mind.
+    validations:
+      required: false
+
+  - type: textarea
+    id: ground-truth
+    attributes:
+      label: What does the generator imply about the result?
+      description: |
+        Check `database/build_zomato_db.py`. Is the relationship you're proposing to measure built
+        into the data, or independent by construction? If independent, the honest framing is that
+        the analysis demonstrates method rather than finding an effect — which is fine, and is what
+        the rest of this project does.
+      placeholder: "restaurant rating and order_status are drawn independently, so the expected effect is zero — this would be a method demo"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: offer
+    attributes:
+      label: Would you like to implement it?
+      options:
+        - label: I'd like to work on this myself
+          required: false
