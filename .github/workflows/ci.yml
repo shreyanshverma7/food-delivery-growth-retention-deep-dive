@@ -19,8 +19,22 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Regenerate the database (must run clean, deterministic seed)
-        run: python3 database/build_zomato_db.py
+      # Asserts that the committed database really is what the generator
+      # produces at seed 42, without overwriting it. The build runs in a temp
+      # directory and the two are compared by logical dump rather than by
+      # bytes: SQLite does not lay pages out deterministically, so identical
+      # data still yields a byte-different file.
+      - name: Verify the committed database matches the generator (seed 42)
+        run: |
+          set -e
+          tmp="$(mktemp -d)"
+          cp database/build_zomato_db.py "$tmp/"
+          (cd "$tmp" && python3 build_zomato_db.py)
+          diff <(sqlite3 "$tmp/zomato.db" .dump) <(sqlite3 database/zomato.db .dump)
+          echo "OK: committed database is reproducible from the generator."
+
+      - name: Fail if any step dirtied the working tree
+        run: git diff --exit-code
 
       - name: Run every SQL deliverable against the database
         run: |

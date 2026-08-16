@@ -1,3 +1,7 @@
 .DS_Store
 __pycache__/
 *.pyc
+
+# Backstop against a stray root-level database. The real one lives at
+# database/zomato.db and is tracked on purpose (Streamlit Cloud serves it).
+/zomato.db

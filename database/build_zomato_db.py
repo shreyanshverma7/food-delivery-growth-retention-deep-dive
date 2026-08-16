@@ -9,10 +9,15 @@ Run:  python3 build_zomato_db.py
 import sqlite3
 import random
 from datetime import date, timedelta
+from pathlib import Path
 
 random.seed(42)  # reproducible
 
-DB = "zomato.db"
+# Anchored to this file, not the working directory. Both the README and CI
+# invoke this as `python3 database/build_zomato_db.py` from the repo root; a
+# bare relative "zomato.db" would resolve against the cwd and quietly write a
+# second database at the repo root while leaving the real one untouched.
+DB = Path(__file__).parent / "zomato.db"
 
 CITIES = ["Bangalore", "Delhi", "Mumbai", "Hyderabad", "Pune", "Chennai", "Kolkata"]
 PLATFORMS = ["iOS", "Android", "Web"]
