@@ -4,3 +4,10 @@ primaryColor = "#3987e5"
 backgroundColor = "#0d0d0d"
 secondaryBackgroundColor = "#1a1a19"
 textColor = "#ffffff"
+
+# Streamlit 1.5x split the sidebar into its own theme namespace, and it does NOT
+# inherit [theme].primaryColor — leaving it unset makes the filter chips and the
+# month-range slider render in Streamlit's stock red, clashing with the blue
+# charts two inches to the right. Restate the accent here to keep one palette.
+[theme.sidebar]
+primaryColor = "#3987e5"
