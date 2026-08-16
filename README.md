@@ -13,7 +13,7 @@ I analysed 6,387 orders from a food-delivery app (2,000 users, 300 restaurants, 
 
 1. **The funnel's worst leak is checkout, not awareness.** Conversion falls from 67.2% to 54.8% between checkout and order_placed — the single biggest step-to-step drop in the funnel, and platform (iOS/Android/Web) isn't the reason (see "Platform" below) — this is a checkout-flow problem, not a device-specific one.
 2. **Cancellations size the largest pool of at-risk revenue — and no breakdown of it survives multiple-comparison correction.** ₹1.24M of gross order value — 41.7% of delivered GMV — sits in cancelled orders. Neither the city spread (Pune 30.7% vs. Delhi 28.6%, p=0.95) nor the payment-method spread (UPI 32.2% vs. NetBanking 26.8%, p=0.019) clears the Bonferroni threshold of 0.0125 for this project's four tests. Chasing either would have been chasing noise — see "Statistical rigor pass" below.
-3. **Retention is genuinely improving, but the ceiling is still low.** Among cohorts with a full 3-month observation window (Jan–Sep signups), month-1 retention climbs from ~20% to ~38–44% over the year — a real trend — but even the best cohorts see fewer than half of signups place a second order.
+3. **Retention looks like it's improving across 2024. It isn't — that curve is the observation window.** Month-1 retention rises from ~20% (January cohort) to 74% (November), and it is tempting to read that as a product getting stickier. Later cohorts simply have less time left in the dataset, so a larger share of their orders necessarily lands in "month + 1". Measured against a zero-retention baseline, the observed curve tracks what pure exposure predicts to within **2.3 percentage points**, with no systematic direction — see [`sql/09_retention_exposure_check.sql`](sql/09_retention_exposure_check.sql).
 
 **Recommendation:** prioritize the checkout-flow fix over further top-of-funnel acquisition spend, and treat cancellations as a sizing exercise rather than a targeting one — the aggregate pool is large, but nothing in the city or payment-method breakdown is strong enough to point an investigation at. Note that on this synthetic data the cancellation pool only outranks the funnel *because* the generator's cancel rate is ~29%; see "Reading these numbers honestly."
 
@@ -64,7 +64,26 @@ Month-1 retention by signup cohort (cohorts with a full 3-month observable windo
 | 2024-07 | 30.0% | 30.0% | 32.0% |
 | 2024-09 | 38.2% | 44.1% | 39.4% |
 
-Retention climbs steadily across the year for cohorts with a complete window. **October and November cohorts show even higher numbers (49.5%, 74.0%) in the dashboard — that's a data-window artifact, not accelerating retention:** those users' orders are compressed into the one or two remaining months of the dataset, inflating near-term retention. Only compare cohorts with a full window.
+Retention climbs steadily across the year. **It is tempting to read that as a product getting stickier, and an earlier version of this README did exactly that — calling Jan–Sep "a real trend" while dismissing only the Oct/Nov cohorts as a data-window artifact. That split was wrong: it is one continuous artifact.**
+
+Every user's orders are spread across the window between their signup date and the end of the data (2024-12-31). A January user's orders scatter over 11 months, so few land in February specifically. A November user has ~1 month left, so almost any order they place lands in "month + 1" by construction. Retention rises because exposure shrinks.
+
+The correlation between a cohort's remaining window and its month-1 retention is **r = −0.93 (p = 0.00004)** across all cohorts — and **r = −0.92 (p = 0.0005) within Jan–Sep alone**, the very range previously called real. There is no break at September; the artifact runs end to end.
+
+#### Testing it properly — [`sql/09_retention_exposure_check.sql`](sql/09_retention_exposure_check.sql)
+
+Truncating to a fixed window does not fix this, because the M+1/M+2/M+3 measurement is *already* a fixed 3-month window. The artifact lives in exposure, not measurement. The right control is to ask what retention a population with **zero** retention behaviour would show, given each cohort's window: for each user, `1 - (1 - p)^n`, where `p` is month+1's share of their window and `n` is their delivered order count.
+
+| Cohort | Window | Observed M+1 | Expected if retention were zero | Excess |
+|---|---:|---:|---:|---:|
+| 2024-01 | 11.5 mo | 20.4% | 17.2% | +3.2 |
+| 2024-03 | 9.6 mo | 19.1% | 18.3% | +0.8 |
+| 2024-05 | 7.6 mo | 22.7% | 23.4% | −0.7 |
+| 2024-07 | 5.6 mo | 30.0% | 30.3% | −0.3 |
+| 2024-09 | 3.6 mo | 38.2% | 40.4% | −2.1 |
+| 2024-11 | 1.5 mo | 74.0% | 75.3% | −1.4 |
+
+Mean absolute gap **2.3 percentage points**, sign scattered in both directions. The entire 20% → 74% "improvement" is reproduced by a model containing no retention behaviour at all. Cohort retention in this dataset is not a product signal — and on real data, this exposure-adjusted baseline is exactly what separates a genuine retention trend from one manufactured by the observation window.
 
 ### 3. GMV drivers: MoM growth and top restaurants — [`sql/03_gmv_drivers.sql`](sql/03_gmv_drivers.sql)
 
@@ -139,6 +158,8 @@ That reframes the results:
 - The delivery-bucket result (p=0.009) is **also a Type I error** — it simply survives correction. This is worth sitting with: multiple-comparison correction lowers the false-positive rate, it does not eliminate it. Knowing the data-generating process is what catches this one, and no amount of p-value discipline substitutes for that. It's also why the non-monotonic pattern was flagged as an open question rather than written up as a delivery-speed finding.
 
 Two false positives in four tests is a bit unlucky against an 18.5% family-wise expectation, but well within the range of a single draw at seed 42.
+
+**The same discipline applied to retention.** Significance testing only catches the artifacts it is pointed at. The cohort trend in Q2 never went through a chi-square test at all — it was a monotonic curve that simply looked like a finding, and an earlier version of this README called it "a real trend." It is a data-window artifact end to end, caught by a different instrument: an exposure-adjusted baseline rather than a p-value ([`sql/09_retention_exposure_check.sql`](sql/09_retention_exposure_check.sql)). Worth stating plainly, because it is the failure mode p-values do not cover — the number nobody thought to test.
 
 **So what is this project for?** The pipeline — funnel construction, cohort retention triangles, revenue-at-risk sizing, significance testing, multiple-comparison correction, power analysis — is the deliverable. Run against real event data it would surface real effects. Run against this data it correctly demonstrates the method, and demonstrates the discipline of not over-claiming on data whose limits I know because I built it.
 

@@ -133,7 +133,7 @@ with st.container(border=True):
         """
 1. **The funnel's worst leak is checkout, not awareness.** Conversion falls from 67.2% to 54.8% between checkout and order_placed — the single biggest step-to-step drop — and platform isn't the reason.
 2. **Cancellations size the biggest pool of at-risk revenue — but no breakdown survives multiple-comparison correction.** ₹1.24M (41.7% of delivered GMV) sits in cancelled orders. Neither the city spread (p=0.95) nor the payment-method spread (p=0.019, above the Bonferroni threshold of 0.0125) is actionable. See **Statistical Tests** for why, and for the ground truth on this synthetic data.
-3. **Retention is genuinely improving, but the ceiling is still low.** Month-1 retention climbs from ~20% to ~38–44% across cohorts with a full observation window — a real trend — but fewer than half of any cohort ever places a second order.
+3. **Retention looks like it's improving across 2024 — that curve is the observation window, not the product.** Month-1 retention rises from ~20% to 74%, but later cohorts have less time left in the data, so more of their orders necessarily land in "month + 1". Against a zero-retention baseline the observed curve tracks pure exposure to within 2.3 percentage points. See **Retention**.
         """
     )
     st.caption(
